@@ -77,6 +77,11 @@ def feature_view(fs):
 def load(fs):
     fv = feature_view(fs)
     X, y = fv.training_data()
+    # the joined (non-root) FG's columns come back prefixed molecule_features_*;
+    # drop the redundant prefixed key/time, strip the prefix off the rest.
+    X = X.drop(columns=[c for c in ("molecule_features_inchikey", "molecule_features_as_of")
+                        if c in X.columns], errors="ignore")
+    X.columns = [c.replace("molecule_features_", "") for c in X.columns]
     X = X.reset_index(drop=True)
     y = y.reset_index(drop=True)
     print(f"qsar_fv rows={len(X):,}  label cols={y.shape[1]}", flush=True)
@@ -194,8 +199,9 @@ def main():
     json.dump({"panel": {t: PANEL[t] for t in PANEL}, "results": results,
                "summary": summary}, open(f"{out}/metrics.json", "w"), indent=2)
     import shutil
-    shutil.copy(f"{_here}/chem_features.py", f"{out}/chem_features.py")
-    shutil.copy(f"{_here}/panel.py", f"{out}/panel.py")
+    repo = os.path.dirname(cf.__file__)   # the FUSE repo dir, not the job's script dir
+    shutil.copy(f"{repo}/chem_features.py", f"{out}/chem_features.py")
+    shutil.copy(f"{repo}/panel.py", f"{out}/panel.py")
     plots(results, out)
 
     mr = proj.get_model_registry()
