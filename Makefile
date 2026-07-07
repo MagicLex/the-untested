@@ -19,6 +19,9 @@ features-job:        ## deploy the molecule featurizer (RDKit fingerprints -> mo
 	hops job deploy untested-features pipelines/features_pipeline.py --env $(CHEM_ENV) --overwrite
 	python3 tools/schedule.py untested-features "0 0 5 2 * ?" --run
 
+labels-job:          ## deploy the panel label pivot (compound_activity -> wide compound_labels)
+	hops job deploy untested-labels pipelines/labels_pipeline.py --env $(FEAT_ENV) --overwrite
+
 train-job:           ## deploy + schedule the AMR QSAR training (stage-1 bar; every run registered)
 	hops job deploy untested-train pipelines/train.py --env $(TRAIN_ENV) --overwrite
 	python3 tools/schedule.py untested-train "0 40 2 ? * *"

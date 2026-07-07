@@ -31,25 +31,8 @@ for _p in [_here] + sorted(glob.glob("/hopsfs/Users/*/the-untested")):
     if _p not in sys.path and os.path.isdir(_p):
         sys.path.insert(0, _p)
 import chem_features as cf  # noqa: E402
+from panel import PANEL, ycol  # noqa: E402
 
-# panel: target_chembl_id -> (label, kind). AMR heads are the product; cytotox
-# heads are auxiliary and power the selectivity overlay (kills bug, not human cell).
-PANEL = {
-    "CHEMBL364": ("P. falciparum (malaria)", "amr"),
-    "CHEMBL2026": ("Beta-lactamase", "amr"),
-    "CHEMBL368": ("T. cruzi (Chagas)", "amr"),
-    "CHEMBL367": ("L. donovani", "amr"),
-    "CHEMBL612849": ("T. brucei", "amr"),
-    "CHEMBL352": ("S. aureus", "amr"),
-    "CHEMBL354": ("E. coli", "amr"),
-    "CHEMBL360": ("M. tuberculosis", "amr"),
-    "CHEMBL348": ("P. aeruginosa", "amr"),
-    "CHEMBL366": ("C. albicans", "amr"),
-    "CHEMBL357": ("E. faecium", "amr"),
-    "CHEMBL392": ("A549 (lung)", "cytotox"),
-    "CHEMBL395": ("HepG2 (liver)", "cytotox"),
-    "CHEMBL399": ("HeLa", "cytotox"),
-}
 N_FOLDS = 5           # scaffold hash folds; fold 0 is the held-out test set
 AD_REF_CAP = 8000     # cap the applicability-domain reference for Tanimoto
 BASE_REF_CAP = 4000   # cap the per-target similarity-search reference
@@ -68,9 +51,9 @@ def scaffold_fold(scaffold, inchikey):
 
 def feature_view(fs):
     """qsar_fv: molecule_features (fingerprint + scaffold + descriptors) joined
-    to compound_activity, filtered to the panel targets. Long format, one row
-    per (molecule, target); label = active. This is the training/serving
-    contract, so serving selects features through the same view."""
+    1:1 to compound_labels (the wide multi-task label matrix) on InChIKey. This
+    is the training/serving contract; serving selects features through the same
+    view, and the label columns are the panel heads."""
     try:
         fv = fs.get_feature_view(FV_NAME, version=1)
         if fv is not None:
@@ -78,16 +61,13 @@ def feature_view(fs):
     except Exception:
         pass
     mf = fs.get_feature_group("molecule_features", 1)
-    ca = fs.get_feature_group("compound_activity", 1)
-    q = (mf.select_all()
-         .join(ca.select(["target_chembl_id", "active"]), on=["inchikey"],
-               join_type="inner")
-         .filter(ca.target_chembl_id.isin(list(PANEL))))
+    cl = fs.get_feature_group("compound_labels", 1)
+    q = mf.select_all().join(cl.select_all(), on=["inchikey"], join_type="inner")
     fv = fs.create_feature_view(
-        name=FV_NAME, version=1, query=q, labels=["active"],
+        name=FV_NAME, version=1, query=q, labels=[ycol(t) for t in PANEL],
         description="AMR-panel QSAR: molecule fingerprint + descriptors + "
-                    "scaffold joined to ChEMBL activity for the panel targets. "
-                    "One row per (molecule, target); label active (pchembl>=6).")
+                    "scaffold joined 1:1 to the wide multi-task label matrix. "
+                    "Labels are the per-target active heads (pchembl>=6).")
     print(f"created {FV_NAME} v1", flush=True)
     return fv
 
@@ -95,28 +75,21 @@ def feature_view(fs):
 def load(fs):
     fv = feature_view(fs)
     X, y = fv.training_data()
-    df = X.copy()
-    df["active"] = pd.to_numeric(
-        y.iloc[:, 0] if isinstance(y, pd.DataFrame) else y,
-        errors="coerce").fillna(0).astype(int).values
-    mf = (df.drop_duplicates("inchikey")
-          [["inchikey", "fp_b64", "scaffold"] + cf.DESCRIPTORS].reset_index(drop=True))
-    ca = df[["inchikey", "target_chembl_id", "active"]]
-    print(f"qsar_fv rows={len(df):,}  molecules={len(mf):,}  "
-          f"targets={ca['target_chembl_id'].nunique()}", flush=True)
-    return mf, ca
+    X = X.reset_index(drop=True)
+    y = y.reset_index(drop=True)
+    print(f"qsar_fv rows={len(X):,}  label cols={y.shape[1]}", flush=True)
+    return X, y
 
 
-def build_matrix(mf):
-    """Unpack fingerprints + descriptors into a float32 matrix, keyed by row."""
-    fp = np.vstack([cf.unpack(b) for b in mf["fp_b64"].values])
-    desc = mf[cf.DESCRIPTORS].to_numpy(np.float32)
-    desc = np.nan_to_num(desc)
-    X = np.hstack([fp, desc]).astype(np.float32)
-    idx = {ik: i for i, ik in enumerate(mf["inchikey"].values)}
+def build_matrix(X):
+    """Unpack fingerprints + descriptors into a float32 matrix, one row per
+    molecule (the FV join is 1:1, so rows align with the label matrix)."""
+    fp = np.vstack([cf.unpack(b) for b in X["fp_b64"].values])
+    desc = np.nan_to_num(X[cf.DESCRIPTORS].to_numpy(np.float32))
+    Xmat = np.hstack([fp, desc]).astype(np.float32)
     folds = np.array([scaffold_fold(s, ik) for s, ik in
-                      zip(mf["scaffold"].fillna("").values, mf["inchikey"].values)])
-    return X, fp, idx, folds
+                      zip(X["scaffold"].fillna("").values, X["inchikey"].values)])
+    return Xmat, fp, folds
 
 
 def tanimoto_max(q_fp, ref_fp, ref_pop):
@@ -131,14 +104,14 @@ def tanimoto_max(q_fp, ref_fp, ref_pop):
     return out
 
 
-def train_target(tid, ca, X, fp, idx, folds):
-    rows = ca[(ca["target_chembl_id"] == tid) & (ca["inchikey"].isin(idx))]
-    ridx = rows["inchikey"].map(idx).to_numpy()
-    y = rows["active"].to_numpy().astype(int)
+def train_target(tid, ylabels, Xmat, fp, folds):
+    yt = ylabels[ycol(tid)].to_numpy(np.float32)
+    ridx = np.where(~np.isnan(yt))[0]      # rows measured for this target
+    y = yt[ridx].astype(int)
     f = folds[ridx]
     te = f == 0
     tr = ~te
-    Xtr, Xte, ytr, yte = X[ridx][tr], X[ridx][te], y[tr], y[te]
+    Xtr, Xte, ytr, yte = Xmat[ridx][tr], Xmat[ridx][te], y[tr], y[te]
     m = HistGradientBoostingClassifier(
         max_iter=300, learning_rate=0.08, l2_regularization=1.0,
         early_stopping=True, validation_fraction=0.15, random_state=0)
@@ -182,12 +155,12 @@ def main():
     import hopsworks
     proj = hopsworks.login()
     fs = proj.get_feature_store()
-    mf, ca = load(fs)
-    X, fp, idx, folds = build_matrix(mf)
+    Xdf, y = load(fs)
+    Xmat, fp, folds = build_matrix(Xdf)
 
     results, models = {}, {}
     for tid, (label, kind) in PANEL.items():
-        m, metrics = train_target(tid, ca, X, fp, idx, folds)
+        m, metrics = train_target(tid, y, Xmat, fp, folds)
         models[tid] = m
         results[tid] = {"label": label, "kind": kind, **metrics}
         print(f"{label:26s} n={metrics['n_train']+metrics['n_test']:6d} "
@@ -218,6 +191,7 @@ def main():
                "summary": summary}, open(f"{out}/metrics.json", "w"), indent=2)
     import shutil
     shutil.copy(f"{_here}/chem_features.py", f"{out}/chem_features.py")
+    shutil.copy(f"{_here}/panel.py", f"{out}/panel.py")
     plots(results, out)
 
     mr = proj.get_model_registry()
