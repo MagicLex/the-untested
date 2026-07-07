@@ -54,6 +54,7 @@ N_FOLDS = 5           # scaffold hash folds; fold 0 is the held-out test set
 AD_REF_CAP = 8000     # cap the applicability-domain reference for Tanimoto
 BASE_REF_CAP = 4000   # cap the per-target similarity-search reference
 MODEL_NAME = "amr_qsar"
+FV_NAME = "qsar_fv"
 
 
 def scaffold_fold(scaffold, inchikey):
@@ -65,15 +66,44 @@ def scaffold_fold(scaffold, inchikey):
     return int(hashlib.md5(key.encode()).hexdigest(), 16) % N_FOLDS
 
 
+def feature_view(fs):
+    """qsar_fv: molecule_features (fingerprint + scaffold + descriptors) joined
+    to compound_activity, filtered to the panel targets. Long format, one row
+    per (molecule, target); label = active. This is the training/serving
+    contract, so serving selects features through the same view."""
+    try:
+        fv = fs.get_feature_view(FV_NAME, version=1)
+        if fv is not None:
+            return fv
+    except Exception:
+        pass
+    mf = fs.get_feature_group("molecule_features", 1)
+    ca = fs.get_feature_group("compound_activity", 1)
+    q = (mf.select_all()
+         .join(ca.select(["target_chembl_id", "active"]), on=["inchikey"],
+               join_type="inner")
+         .filter(ca.target_chembl_id.isin(list(PANEL))))
+    fv = fs.create_feature_view(
+        name=FV_NAME, version=1, query=q, labels=["active"],
+        description="AMR-panel QSAR: molecule fingerprint + descriptors + "
+                    "scaffold joined to ChEMBL activity for the panel targets. "
+                    "One row per (molecule, target); label active (pchembl>=6).")
+    print(f"created {FV_NAME} v1", flush=True)
+    return fv
+
+
 def load(fs):
-    print("reading molecule_features ...", flush=True)
-    mf = fs.get_feature_group("molecule_features", 1).read()
-    print("reading compound_activity ...", flush=True)
-    ca = fs.get_feature_group("compound_activity", 1).read()
-    ca = ca[ca["target_chembl_id"].isin(PANEL)][["inchikey", "target_chembl_id", "active"]]
-    need = set(ca["inchikey"])
-    mf = mf[mf["inchikey"].isin(need)].drop_duplicates("inchikey").reset_index(drop=True)
-    print(f"panel: {len(need):,} labelled compounds, {len(mf):,} with features", flush=True)
+    fv = feature_view(fs)
+    X, y = fv.training_data()
+    df = X.copy()
+    df["active"] = pd.to_numeric(
+        y.iloc[:, 0] if isinstance(y, pd.DataFrame) else y,
+        errors="coerce").fillna(0).astype(int).values
+    mf = (df.drop_duplicates("inchikey")
+          [["inchikey", "fp_b64", "scaffold"] + cf.DESCRIPTORS].reset_index(drop=True))
+    ca = df[["inchikey", "target_chembl_id", "active"]]
+    print(f"qsar_fv rows={len(df):,}  molecules={len(mf):,}  "
+          f"targets={ca['target_chembl_id'].nunique()}", flush=True)
     return mf, ca
 
 
