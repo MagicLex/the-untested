@@ -28,7 +28,8 @@ def main():
     fs = proj.get_feature_store()
 
     print("reading compound_activity ...", flush=True)
-    ca = fs.get_feature_group("compound_activity", 1).read()
+    ca_fg = fs.get_feature_group("compound_activity", 1)
+    ca = ca_fg.read()
     ca = ca[ca["target_chembl_id"].isin(PANEL)][["inchikey", "target_chembl_id", "active"]]
 
     wide = ca.pivot_table(index="inchikey", columns="target_chembl_id",
@@ -47,7 +48,7 @@ def main():
         description="Wide multi-task AMR labels: one row per molecule, one "
                     "column per panel target (1 active / 0 inactive / null "
                     "unmeasured). Joined 1:1 to molecule_features in qsar_fv.",
-        primary_key=["inchikey"], event_time="as_of",
+        primary_key=["inchikey"], event_time="as_of", parents=[ca_fg],
         online_enabled=False, statistics_config=False)
     fg.insert(wide, write_options={"start_offline_materialization": True})
     print(f"inserted {len(wide):,} rows into compound_labels", flush=True)

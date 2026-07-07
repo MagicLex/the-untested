@@ -74,7 +74,9 @@ def main():
     fs = proj.get_feature_store()
 
     print("reading compound_activity for training targets ...", flush=True)
-    ca = fs.get_feature_group("compound_activity", 1).read()
+    ca_fg = fs.get_feature_group("compound_activity", 1)
+    nat_fg = fs.get_feature_group("natural_product", 1)
+    ca = ca_fg.read()
     tcounts = ca.groupby("target_chembl_id")["inchikey"].nunique()
     keep_targets = set(tcounts[tcounts >= MIN_TARGET_COMPOUNDS].index)
     train_keys = set(ca[ca["target_chembl_id"].isin(keep_targets)]["inchikey"])
@@ -82,7 +84,7 @@ def main():
           f"compounds) -> {len(train_keys):,} training compounds", flush=True)
 
     print("reading natural_product ...", flush=True)
-    nat = fs.get_feature_group("natural_product", 1).read()[["inchikey", "smiles"]]
+    nat = nat_fg.read()[["inchikey", "smiles"]]
     nat = nat.dropna(subset=["smiles"]).drop_duplicates("inchikey")
     smiles = dict(zip(nat["inchikey"], nat["smiles"]))
     print(f"{len(smiles):,} natural products with SMILES", flush=True)
@@ -108,7 +110,7 @@ def main():
                     "(base64-packed) + Bemis-Murcko scaffold + 10 physchem "
                     "descriptors, from chem_features.py. LOTUS naturals + ChEMBL "
                     "training compounds. Keyed by InChIKey.",
-        primary_key=["inchikey"], event_time="as_of",
+        primary_key=["inchikey"], event_time="as_of", parents=[nat_fg, ca_fg],
         online_enabled=False, statistics_config=False)
     fg.insert(df, write_options={"start_offline_materialization": True})
     print(f"inserted {len(df):,} rows into molecule_features", flush=True)
