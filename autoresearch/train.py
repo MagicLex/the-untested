@@ -130,6 +130,22 @@ def main():
     print(f"peak_memory_gb: {peak_gb:.2f}")
     print(f"training_seconds: {time.time() - t0:.1f}")
 
+    # register this experiment as the next version of the search model line.
+    # Runs in the job pod (has SDK access); keep/discard is a git decision, but
+    # every successful experiment registers so the registry shows the full run.
+    import sys
+    desc = sys.argv[1] if len(sys.argv) > 1 else "experiment"
+    try:
+        import hopsworks
+        mr = hopsworks.login().get_model_registry()
+        model = mr.python.create_model(
+            "autoresearch_amr", metrics={"mean_amr_auc": round(val, 4)},
+            description=f"{desc[:200]} | mean_amr_auc={val:.4f} use_desc={USE_DESC}")
+        model.save(out)
+        print(f"registered autoresearch_amr v{model.version}", flush=True)
+    except Exception as e:
+        print(f"register failed (metrics still valid): {str(e)[:150]}", flush=True)
+
 
 def _progress_plot(out):
     """Per-target AUC bar for the model card."""
