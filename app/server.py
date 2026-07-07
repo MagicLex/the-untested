@@ -12,6 +12,9 @@ from pydantic import BaseModel
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC = os.path.join(APP_DIR, "static")
+# Hopsworks forwards the full public mount path to the container, so routes must
+# live under it (the how-predictable scar: self-mount under APP_BASE_URL_PATH).
+BASE = os.environ.get("APP_BASE_URL_PATH", "").rstrip("/")
 app = FastAPI()
 _dep = None
 
@@ -24,12 +27,13 @@ def _deployment():
     return _dep
 
 
-@app.get("/", response_class=HTMLResponse)
+@app.get(BASE + "/", response_class=HTMLResponse)
+@app.get(BASE, response_class=HTMLResponse)
 def index():
     return FileResponse(os.path.join(STATIC, "index.html"))
 
 
-@app.get("/static/{name}")
+@app.get(BASE + "/static/{name}")
 def static_file(name: str):
     path = os.path.join(STATIC, name)
     if not os.path.isfile(path):
@@ -37,7 +41,7 @@ def static_file(name: str):
     return FileResponse(path)
 
 
-@app.get("/api/depict")
+@app.get(BASE + "/api/depict")
 def depict(smiles: str):
     from rdkit import Chem
     from rdkit.Chem.Draw import rdMolDraw2D
@@ -59,7 +63,7 @@ class ScoreReq(BaseModel):
     smiles: str
 
 
-@app.post("/api/score")
+@app.post(BASE + "/api/score")
 def score(req: ScoreReq):
     try:
         dep = _deployment()
