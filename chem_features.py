@@ -7,6 +7,8 @@ the descriptor list are frozen here so training and serving never diverge.
 
 Needs RDKit (jobs/serving run on an env clone that pins it).
 """
+import base64
+
 import numpy as np
 from rdkit import Chem
 from rdkit.Chem import Crippen, Descriptors, rdMolDescriptors
@@ -77,12 +79,21 @@ def featurize(smiles):
     return fingerprint(m), descriptors(m)
 
 
-def featurize_row(smiles):
-    """Flat dict: fp_0..fp_2047 + the named descriptors. Convenience for
-    building a feature-group dataframe. Returns None on a bad SMILES."""
+def pack(fp):
+    """2048-bit fingerprint (0/1 float array) -> base64 string (256 bytes
+    packed) for compact single-column feature-group storage. Lossless."""
+    return base64.b64encode(np.packbits(fp.astype(np.uint8)).tobytes()).decode("ascii")
+
+
+def unpack(s):
+    """base64 packed fingerprint -> 2048 float32 array. Inverse of pack()."""
+    return np.unpackbits(np.frombuffer(base64.b64decode(s), dtype=np.uint8)).astype(np.float32)
+
+
+def featurize_packed(smiles):
+    """SMILES -> (packed_fp base64 str, descriptors[10 floats]) for building a
+    molecule_features row, or (None, None) on a bad SMILES."""
     fp, desc = featurize(smiles)
     if fp is None:
-        return None
-    row = {f"fp_{i}": int(b) for i, b in enumerate(fp.astype(np.uint8))}
-    row.update(dict(zip(DESCRIPTORS, desc.tolist())))
-    return row
+        return None, None
+    return pack(fp), desc.tolist()
