@@ -26,6 +26,9 @@ train-job:           ## deploy + schedule the AMR QSAR training (stage-1 bar; ev
 	hops job deploy untested-train pipelines/train.py --env $(TRAIN_ENV) --overwrite
 	python3 tools/schedule.py untested-train "0 40 2 ? * *"
 
+serve:                ## deploy the amrscorer online endpoint (on-demand SMILES QSAR)
+	python3 serving/deploy.py
+
 map-job:             ## deploy + schedule the batch map (score untested naturals -> plant_property_map)
 	hops job deploy untested-map pipelines/map_pipeline.py --env pandas-training-pipeline --overwrite
 	python3 tools/schedule.py untested-map "0 20 3 ? * *"
