@@ -87,8 +87,10 @@ def build_matrix(X):
     fp = np.vstack([cf.unpack(b) for b in X["fp_b64"].values])
     desc = np.nan_to_num(X[cf.DESCRIPTORS].to_numpy(np.float32))
     Xmat = np.hstack([fp, desc]).astype(np.float32)
+    ikey = (X["inchikey"].values if "inchikey" in X.columns
+            else X.index.astype(str).values)   # PK may be dropped by training_data()
     folds = np.array([scaffold_fold(s, ik) for s, ik in
-                      zip(X["scaffold"].fillna("").values, X["inchikey"].values)])
+                      zip(X["scaffold"].fillna("").values, ikey)])
     return Xmat, fp, folds
 
 
