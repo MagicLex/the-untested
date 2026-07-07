@@ -105,11 +105,9 @@ def main():
     fs = proj.get_feature_store()
     fg = fs.get_or_create_feature_group(
         name="compound_activity", version=1,
-        description="ChEMBL bioactivity labels: one row per (molecule InChIKey, "
-                    "target), mean pchembl over repeat measurements plus an "
-                    "active flag (pchembl>=6.0, <=1uM). Every pchembl-labelled "
-                    "pair across all of ChEMBL; the target panel is selected "
-                    "downstream from LOTUS-overlap density.",
+        description="ChEMBL bioactivity labels: one row per (InChIKey, target), "
+                    "mean pchembl over repeats + active flag (pchembl>=6). Every "
+                    "labelled pair across ChEMBL; target panel chosen downstream.",
         primary_key=["inchikey", "target_chembl_id"], event_time="as_of",
         online_enabled=False, statistics_config=False)
     fg.insert(df, write_options={"start_offline_materialization": True})
