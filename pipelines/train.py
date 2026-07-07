@@ -62,7 +62,9 @@ def feature_view(fs):
         pass
     mf = fs.get_feature_group("molecule_features", 1)
     cl = fs.get_feature_group("compound_labels", 1)
-    q = mf.select_all().join(cl.select_all(), on=["inchikey"], join_type="inner")
+    # label FG is the root/spine: features are fetched as-of the label event_time,
+    # so a later-written label still matches an earlier-written feature row.
+    q = cl.select_all().join(mf.select_all(), on=["inchikey"], join_type="inner")
     fv = fs.create_feature_view(
         name=FV_NAME, version=1, query=q, labels=[ycol(t) for t in PANEL],
         description="AMR-panel QSAR: molecule fingerprint + descriptors + "
