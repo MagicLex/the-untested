@@ -26,6 +26,10 @@ train-job:           ## deploy + schedule the AMR QSAR training (stage-1 bar; ev
 	hops job deploy untested-train pipelines/train.py --env $(TRAIN_ENV) --overwrite
 	python3 tools/schedule.py untested-train "0 40 2 ? * *"
 
+map-job:             ## deploy + schedule the batch map (score untested naturals -> plant_property_map)
+	hops job deploy untested-map pipelines/map_pipeline.py --env pandas-training-pipeline --overwrite
+	python3 tools/schedule.py untested-map "0 20 3 ? * *"
+
 smoke-lotus:         ## run the LOTUS ingest from the terminal pod
 	python3 pipelines/lotus_pipeline.py
 smoke-chembl:        ## run the ChEMBL ingest from the terminal pod
@@ -33,4 +37,4 @@ smoke-chembl:        ## run the ChEMBL ingest from the terminal pod
 
 help:
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | sed 's/:.*##/  --/'
-.PHONY: envs lotus-job chembl-job features-job train-job smoke-lotus smoke-chembl help
+.PHONY: envs lotus-job chembl-job labels-job features-job train-job map-job smoke-lotus smoke-chembl help
