@@ -12,8 +12,32 @@ The thesis: train QSAR on every compound ChEMBL has measured, score the ~185k
 LOTUS natural products that were never tested, and show which untested plants
 likely carry activity, with calibrated confidence over where the model is blind.
 
-Status: **building.** Feature pipelines landing (LOTUS map + ChEMBL labels);
-training and serving next. Not yet published or catalogued.
+Status: **full FTI live.** Feature groups, multi-task QSAR, the batch map, and
+the on-demand endpoint are built; an autoresearch loop is searching for a better
+model. Not yet published or catalogued.
+
+## Results so far
+
+![AMR QSAR vs similarity-search baseline](assets/auc_vs_baseline.png)
+
+Champion `amr_qsar` v1, per-target gradient-boosted QSAR, scaffold-held-out
+ROC-AUC over 176k labelled compounds:
+
+- Mean AMR AUC **0.80**, and it beats the 1-NN Tanimoto similarity-search
+  baseline on every scored head (mean lift +0.05).
+- Strong heads: S. aureus 0.90, T. cruzi 0.89, L. donovani 0.85, E. coli 0.85,
+  C. albicans 0.84, P. falciparum 0.83.
+- Weak: P. aeruginosa 0.74, M. tuberculosis 0.69. Dud: Beta-lactamase 0.54
+  (loses to the baseline; kept and flagged, not hidden).
+- **Map validation:** ranking the 227k untested naturals for antimalarial
+  activity surfaces three *Artemisia* species in the top six. *Artemisia* is the
+  artemisinin genus, the frontline antimalarial, recovered from structure alone.
+  The per-molecule score (0.98) beats the family taxonomic prior (0.21).
+
+Live feature groups: `natural_product` (227k), `organism_compound` (544k),
+`compound_activity` (3.76M ChEMBL labels), `molecule_features` (1.87M),
+`compound_labels`, `molecule_prediction` (227k scored), `plant_property_map`
+(412k organism-target rows). Feature view `qsar_fv`. Endpoint `amrscorer`.
 
 ## The honest experiment
 
@@ -90,10 +114,15 @@ flowchart LR
 ## Build
 
 ```
+make envs          # clone the RDKit envs (featurize / train / serve)
 make lotus-job     # F1  LOTUS map + molecule structures + taxonomy
 make chembl-job    # F2  ChEMBL bioactivity labels (bulk SQLite)
-make envs          # clone the RDKit featurize env
-# F3 featurize, T train, I serve + app land as the sprint proceeds
+make labels-job    # F2b pivot the panel into the wide multi-task label group
+make features-job  # F3  Morgan fingerprints -> molecule_features
+make train-job     # T2  multi-task QSAR (scaffold split, vs 1-NN baseline)
+make map-job       # I1  score the untested naturals -> plant_property_map
+make serve         # I2  amrscorer on-demand endpoint
+# autoresearch/ runs the model search (see hopsworks-autoresearch recipe)
 ```
 
 Full specification: [`reqs/the-untested.md`](reqs/the-untested.md).
