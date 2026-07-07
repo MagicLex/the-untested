@@ -17,8 +17,8 @@ training and serving next. Not yet published or catalogued.
 
 ## The honest experiment
 
-A broad predictive map is only research and not snake oil if the discipline
-holds. These are the spec, not garnish:
+The map is only useful if the discipline below holds. These rules are part of
+the spec:
 
 - **Scaffold split, never random.** Score the model on structurally novel
   molecules (Bemis-Murcko scaffold grouping), the same job it does live. Random
@@ -36,8 +36,6 @@ holds. These are the spec, not garnish:
   Loud and permanent. This is a research triage tool, not medical advice.
 
 ## Data
-
-All open, all free, all pulled from the pod.
 
 | source | gives | scale |
 |---|---|---|

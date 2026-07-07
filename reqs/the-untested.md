@@ -11,7 +11,7 @@ plants likely carry activity, with calibrated confidence over where we are blind
 
 ## Honesty rules (non-negotiable, on screen)
 
-These are the spec, not decoration. Breadth without them is confident lies.
+These are part of the spec. Without them, breadth produces confident wrong answers.
 
 1. **Scaffold split, never random.** Random splits leak analogs across
    train/test and inflate QSAR scores. Split by Bemis-Murcko scaffold so the
@@ -56,7 +56,7 @@ These are the spec, not decoration. Breadth without them is confident lies.
 - **Monitored:** applicability-domain coverage of live queries, per-target
   calibration drift, label drift as ChEMBL releases update.
 
-## Data (proven feasible, pulled from the pod)
+## Data
 
 | source | gives | access | scale |
 |---|---|---|---|
