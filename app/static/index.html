@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>the untested</title>
+<link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+<header>
+  <div class="brand">
+    <span class="hex">&#x2b22;</span>
+    <div>
+      <h1>the untested</h1>
+      <p>nature's medicines we never tried. pick a disease, see which untested plant might fight it.</p>
+    </div>
+  </div>
+  <div id="diseases" class="diseases"></div>
+</header>
+
+<main>
+  <aside id="rail">
+    <h2>never-tested plants</h2>
+    <p class="hint" id="railhint">pick a disease above</p>
+    <ol id="raillist"></ol>
+  </aside>
+
+  <section id="stage">
+    <canvas id="sky"></canvas>
+    <div id="legend" class="legend hidden">
+      <span>each dot is a natural molecule, placed by chemical shape</span>
+      <div class="ramp"><i></i><i></i><i></i><i></i><i></i><span class="lo">unlikely</span><span class="hi">likely active</span></div>
+    </div>
+    <div id="tip" class="tip hidden"></div>
+  </section>
+
+  <aside id="dossier" class="hidden">
+    <button id="dclose">&times;</button>
+    <div id="dbody"></div>
+  </aside>
+</main>
+
+<footer>
+  <span id="search-wrap">
+    <input id="smiles" placeholder="or paste any molecule (SMILES) to score it live">
+    <button id="scorebtn">score</button>
+  </span>
+  <span class="disclaimer">Predictions, not prescriptions. Activity in a lab assay is not a cure. Research triage only.</span>
+</footer>
+
+<script src="static/app.js"></script>
+</body>
+</html>

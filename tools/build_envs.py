@@ -21,6 +21,8 @@ ENVS = {
               f"{ROOT_REL}/requirements-train.txt"),
     "serve": ("untested-serve-env", "pandas-inference-pipeline",
               f"{ROOT_REL}/serving/requirements-serve.txt"),
+    "app": ("untested-app-env", "python-app-pipeline",
+            f"{ROOT_REL}/app/requirements-app.txt"),
 }
 
 
