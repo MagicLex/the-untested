@@ -2,6 +2,7 @@
 # Feature (LOTUS map + ChEMBL labels + molecule fingerprints) -> Training (multi-task QSAR + applicability domain) -> Inference (batch map + KServe + certainty-map app)
 FEAT_ENV = python-feature-pipeline
 CHEM_ENV = untested-chem-env
+TRAIN_ENV = untested-train-env
 
 envs:                ## clone the RDKit featurize env (feature base + rdkit)
 	python3 tools/build_envs.py
@@ -18,6 +19,10 @@ features-job:        ## deploy the molecule featurizer (RDKit fingerprints -> mo
 	hops job deploy untested-features pipelines/features_pipeline.py --env $(CHEM_ENV) --overwrite
 	python3 tools/schedule.py untested-features "0 0 5 2 * ?" --run
 
+train-job:           ## deploy + schedule the AMR QSAR training (stage-1 bar; every run registered)
+	hops job deploy untested-train pipelines/train.py --env $(TRAIN_ENV) --overwrite
+	python3 tools/schedule.py untested-train "0 40 2 ? * *"
+
 smoke-lotus:         ## run the LOTUS ingest from the terminal pod
 	python3 pipelines/lotus_pipeline.py
 smoke-chembl:        ## run the ChEMBL ingest from the terminal pod
@@ -25,4 +30,4 @@ smoke-chembl:        ## run the ChEMBL ingest from the terminal pod
 
 help:
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | sed 's/:.*##/  --/'
-.PHONY: envs lotus-job chembl-job smoke-lotus smoke-chembl help
+.PHONY: envs lotus-job chembl-job features-job train-job smoke-lotus smoke-chembl help

@@ -37,10 +37,10 @@ CHEMREPS = ("https://ftp.ebi.ac.uk/pub/databases/chembl/ChEMBLdb/latest/"
 
 def _worker(item):
     ik, smiles = item
-    packed, desc = cf.featurize_packed(smiles)
+    packed, desc, scaf = cf.featurize_full(smiles)
     if packed is None:
         return None
-    return (ik, packed, *desc)
+    return (ik, packed, scaf, *desc)
 
 
 def _chembl_smiles(needed):
@@ -92,7 +92,7 @@ def main():
 
     items = [(ik, s) for ik, s in smiles.items() if isinstance(s, str) and s]
     print(f"featurizing {len(items):,} molecules ...", flush=True)
-    cols = ["inchikey", "fp_b64", *cf.DESCRIPTORS]
+    cols = ["inchikey", "fp_b64", "scaffold", *cf.DESCRIPTORS]
     with Pool(processes=max(1, os.cpu_count())) as pool:
         rows = [r for r in pool.imap_unordered(_worker, items, chunksize=2000)
                 if r is not None]
@@ -104,10 +104,10 @@ def main():
 
     fg = fs.get_or_create_feature_group(
         name="molecule_features", version=1,
-        description="Skew-free molecule model input: 2048-bit Morgan fingerprint "
-                    "(base64-packed) + 10 physchem descriptors, from "
-                    "chem_features.py. Covers LOTUS naturals + ChEMBL training "
-                    "compounds. Keyed by InChIKey.",
+        description="Skew-free molecule input: 2048-bit Morgan fingerprint "
+                    "(base64-packed) + Bemis-Murcko scaffold + 10 physchem "
+                    "descriptors, from chem_features.py. LOTUS naturals + ChEMBL "
+                    "training compounds. Keyed by InChIKey.",
         primary_key=["inchikey"], event_time="as_of",
         online_enabled=False, statistics_config=False)
     fg.insert(df, write_options={"start_offline_materialization": True})

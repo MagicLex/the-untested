@@ -92,8 +92,22 @@ def unpack(s):
 
 def featurize_packed(smiles):
     """SMILES -> (packed_fp base64 str, descriptors[10 floats]) for building a
-    molecule_features row, or (None, None) on a bad SMILES."""
+    molecule_features row, or (None, None) on a bad SMILES. Serving path."""
     fp, desc = featurize(smiles)
     if fp is None:
         return None, None
     return pack(fp), desc.tolist()
+
+
+def featurize_full(smiles):
+    """SMILES -> (packed_fp, descriptors[10], scaffold) parsing the molecule
+    once. For F3, which stores the scaffold for the leak-free training split.
+    Returns (None, None, None) on a bad SMILES."""
+    m = mol(smiles)
+    if m is None:
+        return None, None, None
+    try:
+        scaf = MurckoScaffold.MurckoScaffoldSmiles(mol=m)
+    except Exception:
+        scaf = ""
+    return pack(fingerprint(m)), descriptors(m).tolist(), scaf
