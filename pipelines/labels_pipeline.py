@@ -23,6 +23,11 @@ from panel import PANEL, ycol  # noqa: E402
 
 
 def main():
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--version", type=int, default=1)
+    args = ap.parse_args()
+
     import hopsworks
     proj = hopsworks.login()
     fs = proj.get_feature_store()
@@ -44,7 +49,7 @@ def main():
           flush=True)
 
     fg = fs.get_or_create_feature_group(
-        name="compound_labels", version=1,
+        name="compound_labels", version=args.version,
         description="Wide multi-task AMR labels: one row per molecule, one "
                     "column per panel target (1 active / 0 inactive / null "
                     "unmeasured). Joined 1:1 to molecule_features in qsar_fv.",

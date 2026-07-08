@@ -19,6 +19,8 @@ ENVS = {
              f"{ROOT_REL}/requirements-featurize.txt"),
     "train": ("untested-train-env", "pandas-training-pipeline",
               f"{ROOT_REL}/requirements-train.txt"),
+    "gnn": ("untested-gnn-env", "torch-training-pipeline",
+            f"{ROOT_REL}/requirements-gnn.txt"),
     "serve": ("untested-serve-env", "pandas-inference-pipeline",
               f"{ROOT_REL}/serving/requirements-serve.txt"),
     "app": ("untested-app-env", "python-app-pipeline",
