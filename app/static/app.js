@@ -246,7 +246,7 @@ async function scoreSmiles(smiles){
   const rows=Object.values(res.predictions).filter(v=>v.kind==="amr")
     .sort((a,b)=>b.prob-a.prob);
   const dom=res.in_domain?"the model has seen molecules like this":
-    "OUT of range — the model has seen nothing like this, every score is a guess";
+    "OUT of range: the model has seen nothing like this, every score is a guess";
   document.getElementById("dbody").innerHTML=`
     <h3>your molecule</h3><div class="sub">scored live against every disease</div>
     <div id="mol">drawing…</div>
@@ -278,7 +278,7 @@ function init(){
     const mx=e.clientX-r.left,my=e.clientY-r.top; hover=nearest(mx,my);
     if(hover&&(TID||MODE==="promisc")){
       const label=MODE==="promisc" ? `hits ${promiscN(hover)} diseases`
-        : (prob(hover)!=null?Math.round(prob(hover)*100)+"% likely":"—");
+        : (prob(hover)!=null?Math.round(prob(hover)*100)+"% likely":"n/a");
       tip.innerHTML=`<b>${hover.orgs[0]||"natural product"}</b><br>${label}`;
       tip.style.left=Math.min(mx+12,W-250)+"px"; tip.style.top=(my+12)+"px";
       tip.classList.remove("hidden"); } else tip.classList.add("hidden"); });
