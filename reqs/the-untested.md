@@ -5,9 +5,10 @@ that were **never assayed**, from their molecular structure, aggregate the
 predictions up to the source plants/fungi, and render a **plant × property
 certainty map**. Demo foregrounds antimicrobial resistance (AMR).
 
-The thesis in one line: train QSAR on the ~42k natural products that ChEMBL has
-measured, score the ~185k that nobody ever tested, and show which untested
-plants likely carry activity, with calibrated confidence over where we are blind.
+The thesis in one line: train QSAR on the labelled ChEMBL compounds (176k carry a
+panel label), score the 227k LOTUS naturals that nobody ever tested, and show
+which untested plants likely carry activity, with a first-class confidence over
+where the model is blind.
 
 ## Honesty rules (non-negotiable, on screen)
 
@@ -16,15 +17,15 @@ These are part of the spec. Without them, breadth produces confident wrong answe
 1. **Scaffold split, never random.** Random splits leak analogs across
    train/test and inflate QSAR scores. Split by Bemis-Murcko scaffold so the
    model is scored on structurally novel molecules, the same job it does live.
-2. **Beat the priors, or you earned nothing.** Headline metric is lift over two
-   baselines already sitting in the data: the **taxonomic prior** (same plant
-   family as a known-active plant, from the LOTUS taxonomy columns) and the
-   **folk prior** (already used in ethnobotany, from Dr. Duke's). On screen,
-   measured, same spirit as the where-on-earth zero-shot baseline.
+2. **Beat the priors, or you earned nothing.** Headline metric is lift over the
+   **taxonomic prior** (same plant family as a known-active plant, from the LOTUS
+   taxonomy columns), computed in the batch map next to every organism verdict.
+   The **folk prior** from Dr. Duke's ethnobotany is a second baseline in the
+   design, not built in v1.
 3. **Applicability domain is first-class.** Every prediction carries a
-   calibrated confidence = conformal / distance-to-training in chemical space.
-   A weird alkaloid the model never saw returns "outside what I know," not a
-   confident wrong answer. This layer IS the SOTA part.
+   familiarity = max Tanimoto to a capped sample of the training set in
+   fingerprint space. A weird alkaloid the model never saw reads as a long shot,
+   not a confident wrong answer.
 4. **Coverage per plant.** A plant prediction is only as trustworthy as the
    fraction of its chemistry we actually know. Show "40 of 60 known compounds
    characterized" next to every plant verdict.
@@ -41,11 +42,11 @@ These are part of the spec. Without them, breadth produces confident wrong answe
   target). Multi-task so thin targets borrow strength from fat ones.
 - **KPI:** count of well-founded, novel bioactivity leads (untested plant ×
   property) that survive the priors and the applicability-domain filter.
-- **ML proxy metric:** per-target PR-AUC / AUC on scaffold-held-out molecules,
-  headline = **lift over taxonomic + folk prior**; plus calibration (the
-  confidence must mean what it says).
+- **ML proxy metric:** per-target ROC-AUC / PR-AUC / precision@k on scaffold-
+  held-out molecules, headline = **lift over the 1-NN Tanimoto baseline** and the
+  taxonomic prior; plus applicability-domain coverage.
 - **Data sources:** LOTUS (plant↔molecule + SMILES + taxonomy + chem-class),
-  ChEMBL (molecule→target→pchembl label), Dr. Duke's (folk-use, for the prior).
+  ChEMBL (molecule→target→pchembl label), Dr. Duke's (folk-use, the parked folk prior).
 - **ML-system type:** hybrid. Batch inference precomputes the full map
   (227k molecules × panel → activity + confidence, aggregated to 37k organisms)
   into feature groups; a real-time KServe deployment scores any molecule/plant
@@ -60,19 +61,23 @@ These are part of the spec. Without them, breadth produces confident wrong answe
 
 | source | gives | access | scale |
 |---|---|---|---|
-| LOTUS frozen (Zenodo 19360665) | plant ↔ molecule links | bulk `.csv.gz` | 674k links, 227k molecules, 37k organisms |
+| LOTUS frozen (Zenodo concept DOI 5794106) | plant ↔ molecule links | bulk `.csv.gz` | 544k links, 227k molecules, 37k organisms |
 | LOTUS metadata (same record) | SMILES, formula, mass, xlogp, NPClassifier + ClassyFire class, full organism taxonomy (domain→species) | bulk `.csv.gz` | 227k molecules |
-| ChEMBL 37 (EBI FTP bulk) | molecule → target → `pchembl` activity | SQLite/H5 dump (REST too flaky for bulk) | 2.9M compounds; ~42k overlap with LOTUS = the labeled pool |
-| Dr. Duke's phytochem (USDA) | plant → chemical → ethnobotanical use | bulk / site | folk-prior baseline |
+| ChEMBL 37 (EBI FTP bulk) | molecule → target → `pchembl` activity | SQLite/H5 dump (REST too flaky for bulk) | 2.9M compounds; training pool = the labelled compounds on a panel target, ~42k overlap with LOTUS is the validation slice |
+| Dr. Duke's phytochem (USDA) | plant → chemical → ethnobotanical use | bulk / site | folk-prior baseline (parked) |
 
 Join key across all: **InChIKey** (exact and first-block skeleton both ~42k, so
 the strict exact join is enough; no fuzzy matching).
 
-Target panel v1 (AMR-led): *Plasmodium falciparum* had huge label sets but the
-demo leads AMR: *Mycobacterium tuberculosis*, *Staphylococcus aureus*, and the
-ESKAPE pathogens (*Klebsiella*, *Acinetobacter*, *Pseudomonas*, *Enterobacter*),
-plus a handful of high-density human protein targets to fatten the multi-task
-head. Final panel chosen in F2 by measured label density.
+Target panel v1 (AMR-led, chosen in F2 by measured label density, `panel.py` is
+the single source of truth): 11 AMR heads, *Plasmodium falciparum* (malaria),
+*Mycobacterium tuberculosis*, *Staphylococcus aureus*, *Escherichia coli*,
+*Pseudomonas aeruginosa*, *Enterococcus faecium*, *Candida albicans*, the
+kinetoplastid parasites *Trypanosoma cruzi* / *Leishmania donovani* /
+*Trypanosoma brucei*, and Beta-lactamase, plus 3 human cytotoxicity heads (A549,
+HepG2, HeLa) that fatten the multi-task representation and power a selectivity
+read. The label-poor ESKAPE members (*Klebsiella*, *Acinetobacter*,
+*Enterobacter*) did not clear the density cut and are not in v1.
 
 ---
 
@@ -95,36 +100,54 @@ pipeline is the overlap measurement**: count labeled molecules per target after
 joining ChEMBL InChIKeys to LOTUS, and fix the final target panel from the
 counts. → skills: **hops-data-sources**, **hops-fg**. Blocked-by: none.
 
-**F3 · featurize-molecules**: shared skew-free extractor `chem_features.py`
-(imported by this pipeline and by serving): SMILES → Morgan fingerprint (+ a few
-physchem descriptors). Featurize all 227k LOTUS molecules, write offline FG
-`molecule_features` (the model input). RDKit needs a cloned env.
-→ skills: **hops-features**, **hops-fg**, **hops-environments**. Blocked-by: F1.
+**F2b · pivot-labels**: `compound_activity` is keyed by (InChIKey, target), so a
+feature view cannot join it on InChIKey alone. Pivot it into the wide FG
+`compound_labels`: one row per molecule, one column per panel target (1 active /
+0 inactive / null unmeasured), keyed by InChIKey, so the FV joins it 1:1 to the
+features. → skills: **hops-fg**. Blocked-by: F2.
 
-**F4 · ingest-ethnobotany** (v1.5): Dr. Duke's folk-use → FG `folk_use`, the
-folk-prior baseline. → skills: **hops-data-sources**, **hops-fg**. Blocked-by: none.
+**F3 · featurize-molecules**: shared skew-free extractor `chem_features.py`
+(imported by this pipeline and by serving): SMILES → 2048-bit Morgan fingerprint
+(base64-packed) + Bemis-Murcko scaffold + 10 physchem descriptors. Featurize the
+LOTUS naturals and every ChEMBL compound on a panel target, write offline FG
+`molecule_features` (the model input). RDKit needs a cloned env.
+→ skills: **hops-features**, **hops-fg**, **hops-environments**. Blocked-by: F1, F2.
+
+**F3b · smiles-map**: the featurizer packs the fingerprint and drops SMILES, but
+the stage-2 GNN eats the molecule graph, built from SMILES. Persist canonical
+SMILES for exactly the molecules in `molecule_features` into the sidecar FG
+`molecule_smiles`, keyed by InChIKey, 1:1 with the features. → skills:
+**hops-fg**. Blocked-by: F3.
+
+**F4 · ingest-ethnobotany** (parked): Dr. Duke's folk-use → FG `folk_use`, the
+folk-prior baseline. Not built in v1. → skills: **hops-data-sources**,
+**hops-fg**. Blocked-by: none.
 
 ### T: Training pipeline (model-dependent transformations, MDTs, + model)
 
 **T1 · EDA**: profile the LOTUS↔ChEMBL join, confirm the measured per-target
 label density, leakage audit. Enforce **scaffold split** (Bemis-Murcko), verify
 no InChIKey/scaffold crosses train/test, check class balance per target. Confirm
-the taxonomic-prior and folk-prior baselines compute.
+the taxonomic-prior baseline computes.
 → skills: **hops-eda**, **hops-eda-checklist**. Blocked-by: F1, F2, F3.
 
-**T2 · train-qsar**: FV `qsar_fv` = `molecule_features` JOIN `compound_activity`
-on InChIKey, with scaffold-group training data. MDTs on the FV: per-target label
-masking (a molecule unlabeled for target *k* contributes no loss there), per-
-target class weighting.
-- **Stage 1 (the bar):** multi-task FP + gradient boosting / small MLP head.
-- **Stage 2 (SOTA):** Chemprop-style message-passing GNN on molecule graphs.
-- **Applicability-domain layer:** conformal prediction / distance-to-training in
-  fingerprint space → calibrated per-prediction confidence.
-- **Evaluate:** per-target ROC/PR-AUC on scaffold-held-out molecules,
-  calibration curves, applicability-domain coverage, and **lift over taxonomic +
-  folk priors**. Register model + images (per-target ROC/PR, calibration,
-  coverage, lift-vs-baseline bars). **Ship the GNN only if it beats the
-  FP-GBM bar live.** Register every run (lineage), pick champion by advertised
+**T2 · train-qsar**: FV `qsar_fv` = `compound_labels` (root/spine) JOIN
+`molecule_features` on InChIKey. The label FG is the root so features are fetched
+as-of the label event_time and a later-written label still matches. Per-target
+label masking (a molecule unlabeled for target *k* contributes no loss there).
+- **Stage 1 (the bar):** per-target HistGradientBoosting on the fingerprint + 10
+  descriptors. Registered as `amr_qsar`, the served champion.
+- **Stage 2:** multi-task Chemprop message-passing GNN on the molecule graph,
+  served the same labels through `qsar_gnn_fv` (`compound_labels` JOIN
+  `molecule_smiles`), scored on the same scaffold fold-0 test as the bar.
+  Registered as `amr_qsar_gnn`.
+- **Applicability-domain layer:** `ad_score` = max Tanimoto to a capped sample of
+  the training fingerprints, stored per prediction. Out-of-domain reads as a long
+  shot, not a confident answer.
+- **Evaluate:** per-target ROC-AUC / PR-AUC / precision@k on scaffold-held-out
+  molecules, applicability-domain coverage, and **lift over the 1-NN Tanimoto
+  baseline**. Register model + eval images. **Promote the GNN only if it clears
+  the FP-GBM bar.** Register every run (lineage), pick champion by advertised
   metric at serve time.
 → skills: **hops-train**, **hops-transformations**, **hops-fv**,
 **hops-environments**. Blocked-by: T1.
@@ -143,12 +166,15 @@ absent from LOTUS. Uses the shared `chem_features.py` (no skew). Returns activit
 + confidence + the driving molecule + nearest known drug (Tanimoto) + AD flag.
 → skills: **hops-online-inference**, **hops-environments**. Blocked-by: T2.
 
-**I3 · app**: the UI. Certainty map, plant/molecule search, AMR attention rail
-(untested plants ranked by predicted antimicrobial activity × confidence ×
-coverage), per-plant dossier with the priors shown side by side, permanent
-"binding-active ≠ cure" warning, external links to the source records (LOTUS,
-ChEMBL, PubChem). Logs inputs + predictions for monitoring.
-→ skills: **hops-app**, **hops-monitoring**. Blocked-by: I1, I2.
+**I3 · app**: the UI. A chemical-space certainty map (t-SNE of the fingerprints)
+recoloured per disease, an attention rail of the untested organisms ranked by
+predicted activity, a per-organism dossier that draws the molecule, links the
+source organism to Wikipedia, and shows the applicability-domain familiarity, a
+live SMILES scorer, and a broad-spectrum view that recolours the map by how many
+diseases a molecule hits at once and flags low-familiarity frequent-hitters. The
+"binding-active is not a cure" warning is permanent on every screen. Logs inputs
++ predictions for monitoring. → skills: **hops-app**, **hops-monitoring**.
+Blocked-by: I1, I2.
 
 ## Engine note (taste sibling, later)
 
@@ -160,4 +186,5 @@ not a rewrite. Not built now.
 
 ## Build order
 
-F1, F2, F4 in parallel (no deps) → F3 (needs F1) → T1 → T2 → I1, I2 → I3.
+F1, F2 in parallel (no deps) → F2b (needs F2) → F3 (needs F1, F2) → F3b (needs
+F3) → T1 → T2 → I1, I2 → I3. F4 parked.

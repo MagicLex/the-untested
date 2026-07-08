@@ -75,7 +75,6 @@ scores identically on the endpoint and in the batch map.
 flowchart LR
     lotus([LOTUS]):::ext
     chembl([ChEMBL]):::ext
-    duke([Dr. Dukes]):::ext
 
     subgraph FE[Feature]
         direction TB
@@ -105,7 +104,6 @@ flowchart LR
     ms --> gfv
     reg --> map --> app
     reg --> ep
-    duke -. folk prior .-> t1
     who([researcher]):::ext --> app --> ep
 
     classDef hops fill:#10b98122,stroke:#34d399,color:#e5e7eb;
@@ -123,7 +121,6 @@ The sources:
 |---|---|---|
 | [LOTUS](https://lotus.naturalproducts.net/) | organism to molecule, SMILES, taxonomy, chemical class | 544k links, 227k molecules, 37k organisms |
 | [ChEMBL](https://www.ebi.ac.uk/chembl/) | molecule to target, pchembl potency label | 2.9M compounds, ~42k overlap with LOTUS |
-| [Dr. Duke's](https://phytochem.nal.usda.gov/) | plant to chemical, ethnobotanical use | folk-prior baseline |
 
 The file-by-file map:
 
