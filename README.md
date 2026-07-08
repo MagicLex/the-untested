@@ -106,8 +106,8 @@ flowchart LR
     reg --> ep
     who([researcher]):::ext --> app --> ep
 
-    classDef hops fill:#10b98122,stroke:#34d399,color:#e5e7eb;
-    classDef ext fill:none,stroke:#6b7280,color:#9ca3af,stroke-dasharray:4 3;
+    classDef hops fill:#10b98118,stroke:#34d399,stroke-width:1px;
+    classDef ext fill:none,stroke:#9ca3af,stroke-dasharray:4 3;
 ```
 
 Training is staged. Stage 1 is the fingerprint GBM above, the bar. Stage 2 is a
