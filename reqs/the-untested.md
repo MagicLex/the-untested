@@ -7,10 +7,10 @@ certainty map**. Demo foregrounds antimicrobial resistance (AMR).
 
 The thesis in one line: train QSAR on the labelled ChEMBL compounds (176k carry a
 panel label), score the 227k LOTUS naturals that nobody ever tested, and show
-which untested plants likely carry activity, with a first-class confidence over
+which untested plants likely carry activity, with an explicit confidence over
 where the model is blind.
 
-## Honesty rules (non-negotiable, on screen)
+## Honesty rules
 
 These are part of the spec. Without them, breadth produces confident wrong answers.
 
